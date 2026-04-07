@@ -170,13 +170,14 @@ if (dropZone) {
   dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
 }
 
-function startScanning() {
+async function startScanning() {
   const hasSaved = confirm("Máš uloženú predošlú tabuľku?");
   if (hasSaved) {
     history = [];
     localStorage.removeItem('blocky_history');
     renderHistory();
     resetUpload();
+    await fetch(SHEETS_URL + '?action=clear', { method: 'GET', mode: 'no-cors' });
     document.getElementById('fileInputCamera').click();
   }
 }
