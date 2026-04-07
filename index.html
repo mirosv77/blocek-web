@@ -344,10 +344,10 @@ async function saveToSheets() {
     localStorage.setItem('blocky_history', JSON.stringify(history.slice(0, 50)));
     renderHistory();
 
-    showStatus(statusEl, '✓ Zapísané! Otváram Google Sheet...', 'success');
+    statusEl.className = 'status success';
+    statusEl.innerHTML = '✓ Zapísané!<br><br><button class="btn primary" style="margin-top:6px;width:100%;justify-content:center" onclick="resetUpload()">📷 Ďalší bloček →</button>';
     pendingData = null;
     window.open('https://docs.google.com/spreadsheets/d/1jS1NmkxOQvg0YWdoQgYB8FUcX2XsK0nfe1_d8hwMS0o/edit', '_blank');
-    setTimeout(() => resetUpload(), 2500);
   } catch(err) {
     showStatus(statusEl, 'Chyba: ' + err.message, 'error');
     btn.disabled = false;
