@@ -107,7 +107,7 @@
     <div id="resultMeta" class="result-meta"></div>
     <div class="result-grid" id="resultGrid"></div>
     <div class="btn-row" style="margin-top:1rem">
-      <button class="btn green" id="saveBtn" onclick="saveToSheets()">✓ Zapísať do Google Sheets</button>
+      <button class="btn green" id="saveBtn" onclick="saveToSheets()">✓ Zapísať a otvoriť Sheet</button>
       <button class="btn red" onclick="retakePhoto()">↩ Odfotiť znova</button>
     </div>
     <div id="saveStatus" class="status"></div>
@@ -229,7 +229,7 @@ DÔLEŽITÉ PRAVIDLÁ:
 - B 23% = sadzba 23%
 - Ak sadzba 23% NIE JE na bločku, daj zak_23=null a dph_23=null
 
-Môže tam byť aj halierové zaokrúhlenie (Hal+ kladné alebo Hal- záporné).
+Ak je na bločku halierové zaokrúhlenie, vráť ho ako jedno číslo so znamienkom: kladné (napr. 0.02) alebo záporné (napr. -0.01).
 
 Vráť VÝLUČNE JSON (bez markdown):
 {
@@ -238,8 +238,7 @@ Vráť VÝLUČNE JSON (bez markdown):
   "obchod": "názov obchodu alebo null",
   "datum": "DD.MM.YYYY alebo null",
   "celkom": číslo celkovej sumy k úhrade alebo null,
-  "hal_plus": číslo alebo null,
-  "hal_minus": číslo alebo null,
+  "hal": číslo so znamienkom (napr. 0.02 alebo -0.01) alebo null ak žiadne zaokrúhlenie,
   "zak_5": číslo alebo null,
   "dph_5": číslo alebo null,
   "zak_19": číslo alebo null,
@@ -251,7 +250,7 @@ Vráť VÝLUČNE JSON (bez markdown):
 
 Pravidlá:
 - Čísla presne z bločku, desatinná bodka (nie čiarka)
-- hal_plus: kladné zaokrúhlenie, hal_minus: záporné ako kladné číslo
+- hal: zaokrúhlenie so znamienkom — kladné napr. 0.02, záporné napr. -0.01, null ak žiadne
 - Ak sadzba na bločku nie je (žiadny riadok pre tú sadzbu), daj null
 - nacitane_ok = false ak DPH tabuľku nevidíš vôbec`;
 
@@ -272,6 +271,14 @@ Pravidlá:
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+    // Rozdeliť hal na hal_plus / hal_minus podľa znamienka
+    if (parsed.hal != null) {
+      if (parsed.hal >= 0) { parsed.hal_plus = parsed.hal; parsed.hal_minus = null; }
+      else { parsed.hal_plus = null; parsed.hal_minus = Math.abs(parsed.hal); }
+    } else {
+      parsed.hal_plus = null; parsed.hal_minus = null;
+    }
+    delete parsed.hal;
     pendingData = parsed;
 
     if (!parsed.nacitane_ok) {
@@ -321,12 +328,8 @@ async function saveToSheets() {
   showStatus(statusEl, 'Zapisujem do Google Sheets...', 'loading');
 
   try {
-    await fetch(SHEETS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(pendingData)
-    });
+    const getUrl = SHEETS_URL + '?data=' + encodeURIComponent(JSON.stringify(pendingData));
+    await fetch(getUrl, { method: 'GET', mode: 'no-cors' });
 
     const entry = {
       obchod: pendingData.obchod || '(bez názvu)',
@@ -337,9 +340,10 @@ async function saveToSheets() {
     localStorage.setItem('blocky_history', JSON.stringify(history.slice(0, 50)));
     renderHistory();
 
-    showStatus(statusEl, '✓ Zapísané! Môžeš odfotiť ďalší bloček.', 'success');
+    showStatus(statusEl, '✓ Zapísané! Otváram Google Sheet...', 'success');
     pendingData = null;
-    setTimeout(() => resetUpload(), 2000);
+    window.open('https://docs.google.com/spreadsheets/d/1jS1NmkxOQvg0YWdoQgYB8FUcX2XsK0nfe1_d8hwMS0o/edit', '_blank');
+    setTimeout(() => resetUpload(), 2500);
   } catch(err) {
     showStatus(statusEl, 'Chyba: ' + err.message, 'error');
     btn.disabled = false;
