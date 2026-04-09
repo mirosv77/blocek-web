@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bločky → Google Sheets</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; padding: 1.5rem 1rem; }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.2rem; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 1.5rem; }
+  .card { background: #fff; border-radius: 12px; border: 1px solid #e5e5e5; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .section-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.75rem; }
+  .key-row { display: flex; gap: 8px; }
+  .key-input { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px; background: #fafafa; }
+  .key-input:focus { outline: none; border-color: #4285f4; }
+  .api-note { font-size: 12px; color: #888; margin-top: 6px; line-height: 1.6; }
+  .api-note a { color: #4285f4; }
+  .key-saved { font-size: 13px; color: #137333; font-weight: 500; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 14px; font-weight: 500; color: #1a1a1a; transition: all 0.15s; }
+  .btn:hover { background: #f5f5f5; }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn.primary:hover { background: #333; }
+  .btn.green { background: #137333; color: #fff; border-color: #137333; }
+  .btn.green:hover { background: #0d5c29; }
+  .btn.full { width: 100%; padding: 14px; font-size: 15px; font-weight: 600; }
+  .btn.pick { background: #e8f0fe; border-color: #c5d8fd; color: #1a73e8; font-size: 15px; padding: 14px; font-weight: 600; }
+  .btn.pick:hover { background: #d2e3fc; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn.sm { font-size: 12px; padding: 6px 12px; }
+
+  /* Progress bar */
+  .prog-wrap { background: #f0f0f0; border-radius: 99px; height: 6px; margin-bottom: 0.5rem; overflow: hidden; }
+  .prog-bar { height: 100%; background: #137333; border-radius: 99px; transition: width 0.3s ease; }
+  .prog-label { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 0.25rem; }
+  .prog-sub { font-size: 12px; color: #888; margin-bottom: 0.75rem; }
+
+  /* File list */
+  .file-list { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
+  .file-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; background: #f8f8f6; border: 1px solid transparent; font-size: 13px; }
+  .file-item.ok   { border-color: #b7dfbf; background: #f0faf2; }
+  .file-item.err  { border-color: #f5c6c5; background: #fff5f5; }
+  .file-item.warn { border-color: #ffe082; background: #fffde7; }
+  .file-item.run  { border-color: #c5d8fd; background: #f0f6ff; }
+  .fi-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+  .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #444; }
+  .fi-status { font-weight: 500; white-space: nowrap; color: #888; font-size: 12px; }
+  .fi-status.ok   { color: #137333; }
+  .fi-status.err  { color: #c5221f; }
+  .fi-status.warn { color: #b06000; }
+  .fi-status.run  { color: #1a73e8; }
+
+  /* Summary grid */
+  .sum-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .sum-item { background: #f8f8f6; border-radius: 8px; padding: 12px; text-align: center; }
+  .sum-val { font-size: 28px; font-weight: 700; line-height: 1; }
+  .sum-val.green { color: #137333; }
+  .sum-val.red   { color: #c5221f; }
+  .sum-val.gray  { color: #ccc; }
+  .sum-label { font-size: 11px; color: #888; margin-top: 4px; }
+  .sheets-link { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #4285f4; text-decoration: none; margin-top: 0.75rem; }
+  .sheets-link:hover { text-decoration: underline; }
+
+  /* Alert box */
+  .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; }
+  .alert.error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c5; }
+  .alert.success { background: #e6f4ea; color: #137333; border: 1px solid #b7dfbf; }
+  .alert.warning { background: #fff8e1; color: #b06000; border: 1px solid #ffe082; }
+
+  .spinner { width: 13px; height: 13px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .selected-info { font-size: 13px; color: #555; margin-top: 0.75rem; padding: 8px 12px; background: #f0f6ff; border-radius: 8px; border: 1px solid #c5d8fd; display: none; }
+  .selected-info strong { color: #1a73e8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧾 Bločky → Google Sheets</h1>
+  <p class="subtitle">Vyber fotky bločkov → Gemini prečíta DPH → zapíše do Sheets</p>
+
+  <!-- API key -->
+  <div class="card" id="keyCard">
+    <div class="section-title">Gemini API kľúč</div>
+    <div class="key-row">
+      <input class="key-input" type="password" id="apiKeyInput" placeholder="AIzaSy..." />
+      <button class="btn primary" onclick="saveKey()">Uložiť</button>
+    </div>
+    <p class="api-note">Zadarmo na <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> — model gemini-2.5-flash vyžaduje Tier 1.</p>
+  </div>
+
+  <!-- File picker -->
+  <div class="card" id="pickCard">
+    <div class="section-title">Výber bločkov</div>
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="onFilesSelected(this.files)" />
+    <button class="btn pick full" onclick="document.getElementById('fileInput').click()">
+      🖼️ Vybrať fotky
+    </button>
+    <div class="selected-info" id="selectedInfo"></div>
+    <div style="margin-top:10px;display:none" id="startRow">
+      <button class="btn green full" id="startBtn" onclick="startProcessing()">
+        🚀 Spracovať <span id="startCount"></span> bločkov
+      </button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="card" id="progressCard" style="display:none">
+    <div class="section-title">Prebieha spracovanie</div>
+    <div class="prog-label" id="progLabel">Spracováva sa 0/0 bločkov...</div>
+    <div class="prog-sub" id="progSub"></div>
+    <div class="prog-wrap"><div class="prog-bar" id="progBar" style="width:0%"></div></div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card" id="summaryCard" style="display:none">
+    <div class="section-title">Výsledok</div>
+    <div class="sum-grid">
+      <div class="sum-item">
+        <div class="sum-val green" id="sumOk">0</div>
+        <div class="sum-label">Zapísané</div>
+      </div>
+      <div class="sum-item">
+        <div class="sum-val red" id="sumErr">0</div>
+        <div class="sum-label">Chyby</div>
+      </div>
+      <div class="sum-item">
+        <div class="sum-val gray" id="sumWarn">0</div>
+        <div class="sum-label">Nečitateľné</div>
+      </div>
+    </div>
+    <a class="sheets-link" id="sheetsLink" href="https://docs.google.com/spreadsheets/d/1jS1NmkxOQvg0YWdoQgYB8FUcX2XsK0nfe1_d8hwMS0o/edit" target="_blank">
+      📊 Otvoriť Google Sheets
+    </a>
+    <div style="margin-top:0.75rem">
+      <button class="btn sm" onclick="resetAll()">← Spracovať ďalšie</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SHEETS_URL  = "https://script.google.com/macros/s/AKfycbz9PlLnCbBU-FxHMxMu3z--O6_DuAXuFYfT1DFJop5lBQRYNNGHJGjIVe3gDKB_wJzI/exec";
+const SHEET_ID    = "1jS1NmkxOQvg0YWdoQgYB8FUcX2XsK0nfe1_d8hwMS0o";
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+const PROMPT = `Si účtovný asistent. Na tomto bločku nájdi DPH rekapituláciu (tabuľka na konci bločku).
+Bloček môže byť celý alebo len jeho spodná časť — vždy hľadaj tabuľku so sadzbami DPH.
+
+Tabuľka vyzerá takto (príklad):
+  Sadzba:   Základ:   DPH:
+  C 05%      3,68     0,18
+  E 19%     16,12     3,06
+  SPOLU:    19,80     3,24
+
+DÔLEŽITÉ PRAVIDLÁ:
+- Čítaj IBA jednotlivé riadky sadzieb (napr. C 05%, E 19%, B 23%) — každý zvlášť
+- Riadok "SPOLU" alebo "CELKOM" IGNORUJ — to je len súčet, nie sadzba!
+- Písmená sadzby (A,B,C,D,E...) sú len označenia — dôležité je percento vedľa nich
+- C 05% alebo C 5% = sadzba 5%
+- E 19% alebo E 10% = sadzba 19% (môže byť aj 10%)
+- B 23% = sadzba 23%
+- Ak sadzba 23% NIE JE na bločku, daj zak_23=null a dph_23=null
+
+Ak je na bločku halierové zaokrúhlenie, vráť ho ako jedno číslo so znamienkom: kladné (napr. 0.02) alebo záporné (napr. -0.01).
+
+Vráť VÝLUČNE JSON (bez markdown, bez kódu):
+{
+  "nacitane_ok": true alebo false,
+  "problem": "popis problému alebo null",
+  "obchod": "názov obchodu alebo null",
+  "datum": "DD.MM.YYYY alebo null",
+  "celkom": číslo celkovej sumy k úhrade alebo null,
+  "hal": číslo so znamienkom (napr. 0.02 alebo -0.01) alebo null,
+  "zak_5": číslo alebo null,
+  "dph_5": číslo alebo null,
+  "zak_19": číslo alebo null,
+  "dph_19": číslo alebo null,
+  "vz_0": číslo alebo null,
+  "zak_23": číslo alebo null,
+  "dph_23": číslo alebo null
+}`;
+
+let selectedFiles = [];
+
+/* ── Init ── */
+window.addEventListener('load', () => {
+  if (localStorage.getItem('gemini_api_key')) showKeySaved();
+});
+
+/* ── API key ── */
+function saveKey() {
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if (!v) return;
+  localStorage.setItem('gemini_api_key', v);
+  showKeySaved();
+}
+function showKeySaved() {
+  const v = localStorage.getItem('gemini_api_key') || '';
+  document.getElementById('keyCard').innerHTML = `
+    <div class="key-saved">✓ Gemini API kľúč nastavený (${v.substring(0,8)}...)</div>
+    <p class="api-note" style="margin-top:4px"><a href="#" onclick="resetKey();return false;">Zmeniť kľúč</a></p>`;
+}
+function resetKey() { localStorage.removeItem('gemini_api_key'); location.reload(); }
+
+/* ── File selection ── */
+function onFilesSelected(files) {
+  selectedFiles = Array.from(files);
+  if (!selectedFiles.length) return;
+
+  const info = document.getElementById('selectedInfo');
+  info.style.display = 'block';
+  info.innerHTML = `Vybrané: <strong>${selectedFiles.length} ${selectedFiles.length === 1 ? 'fotka' : selectedFiles.length < 5 ? 'fotky' : 'fotiek'}</strong>`;
+
+  document.getElementById('startCount').textContent = selectedFiles.length;
+  document.getElementById('startRow').style.display = 'block';
+}
+
+/* ── Helpers ── */
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res({ b64: r.result.split(',')[1], mime: file.type || 'image/jpeg' });
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function splitHal(parsed) {
+  const hal = parsed.hal;
+  if (hal != null && hal !== 0) {
+    parsed.hal_plus  = hal > 0 ? hal  : null;
+    parsed.hal_minus = hal < 0 ? hal  : null;  // záporná hodnota (napr. -0.01)
+  } else {
+    parsed.hal_plus  = null;
+    parsed.hal_minus = null;
+  }
+  delete parsed.hal;
+  return parsed;
+}
+
+async function geminiAnalyze(b64, mime) {
+  const key = localStorage.getItem('gemini_api_key');
+  if (!key) throw new Error('Chýba Gemini API kľúč.');
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { inline_data: { mime_type: mime, data: b64 } },
+          { text: PROMPT }
+        ]}],
+        generationConfig: { temperature: 0 }
+      })
+    }
+  );
+
+  if (resp.status === 429) {
+    throw new Error('Prekročený limit požiadaviek — aktivuj Tier 1 v Google Cloud Console');
+  }
+  if (!resp.ok) {
+    const e = await resp.json().catch(() => ({}));
+    throw new Error(e.error?.message || `Gemini chyba ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const json = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(json);
+}
+
+async function writeToSheets(data) {
+  await fetch(SHEETS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data)
+  });
+}
+
+/* ── UI helpers ── */
+function shortName(name, max = 30) {
+  return name.length > max ? name.substring(0, max - 1) + '…' : name;
+}
+
+function setItem(idx, cls, icon, statusCls, statusTxt) {
+  const el = document.querySelector(`.file-item[data-idx="${idx}"]`);
+  if (!el) return;
+  el.className = 'file-item ' + cls;
+  el.querySelector('.fi-icon').textContent = icon;
+  const s = el.querySelector('.fi-status');
+  s.className = 'fi-status ' + statusCls;
+  s.textContent = statusTxt;
+}
+
+function updateProgress(done, total, currentName) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progBar').style.width = pct + '%';
+  document.getElementById('progLabel').textContent =
+    done < total
+      ? `Spracováva sa ${done + 1}/${total} bločkov…`
+      : `Dokončené ${total}/${total}`;
+  document.getElementById('progSub').textContent = currentName || '';
+}
+
+/* ── Main processing ── */
+async function startProcessing() {
+  if (!localStorage.getItem('gemini_api_key')) {
+    alert('Najprv zadaj Gemini API kľúč.');
+    return;
+  }
+  if (!selectedFiles.length) return;
+
+  // Hide pick card, show progress
+  document.getElementById('pickCard').style.display = 'none';
+  document.getElementById('summaryCard').style.display = 'none';
+  const progCard = document.getElementById('progressCard');
+  progCard.style.display = 'block';
+  progCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const total = selectedFiles.length;
+  updateProgress(0, total, '');
+
+  // Build file list
+  const listEl = document.getElementById('fileList');
+  listEl.innerHTML = selectedFiles.map((f, i) => `
+    <div class="file-item" data-idx="${i}">
+      <span class="fi-icon">⏳</span>
+      <span class="fi-name" title="${f.name}">${shortName(f.name)}</span>
+      <span class="fi-status">čaká</span>
+    </div>`).join('');
+
+  let ok = 0, err = 0, warn = 0;
+  let rateLimitHit = false;
+
+  for (let i = 0; i < total; i++) {
+    const file = selectedFiles[i];
+    updateProgress(i, total, shortName(file.name, 40));
+    setItem(i, 'run', '⏳', 'run', 'spracovávam…');
+
+    if (rateLimitHit) {
+      setItem(i, 'err', '⏸️', 'err', 'prerušené — rate limit');
+      err++;
+      continue;
+    }
+
+    try {
+      const { b64, mime } = await fileToBase64(file);
+      let parsed = await geminiAnalyze(b64, mime);
+
+      if (!parsed.nacitane_ok) {
+        const msg = parsed.problem || 'DPH tabuľka nečitateľná';
+        setItem(i, 'warn', '⚠️', 'warn', msg.substring(0, 35));
+        warn++;
+        continue;
+      }
+
+      parsed = splitHal(parsed);
+      await writeToSheets(parsed);
+
+      const label = [parsed.obchod, parsed.datum]
+        .filter(Boolean).join(' · ') || '✓ zapísané';
+      setItem(i, 'ok', '✅', 'ok', label.substring(0, 35));
+      ok++;
+
+    } catch (e) {
+      const msg = e.message || 'Neznáma chyba';
+      if (msg.includes('Prekročený limit') || msg.includes('Tier 1')) {
+        rateLimitHit = true;
+        setItem(i, 'err', '🚫', 'err', 'Rate limit — aktivuj Tier 1');
+        err++;
+        // Show prominent alert
+        const alert = document.createElement('div');
+        alert.className = 'alert error';
+        alert.style.marginTop = '0.75rem';
+        alert.innerHTML = `⚠️ <strong>Prekročený limit požiadaviek</strong> — aktivuj Tier 1 v <a href="https://console.cloud.google.com/billing" target="_blank" style="color:inherit;font-weight:600">Google Cloud Console</a>`;
+        progCard.appendChild(alert);
+      } else {
+        setItem(i, 'err', '❌', 'err', msg.substring(0, 35));
+        err++;
+      }
+    }
+  }
+
+  // Done
+  updateProgress(total, total, '');
+
+  document.getElementById('sumOk').textContent   = ok;
+  document.getElementById('sumErr').textContent  = err + warn;
+  document.getElementById('sumWarn').textContent = warn;
+  // Reuse err column for hard errors only
+  document.getElementById('sumErr').textContent  = err;
+
+  document.getElementById('summaryCard').style.display = 'block';
+  document.getElementById('summaryCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  if (ok > 0) {
+    window.open(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`, '_blank');
+  }
+}
+
+function resetAll() {
+  selectedFiles = [];
+  document.getElementById('fileInput').value = '';
+  document.getElementById('selectedInfo').style.display = 'none';
+  document.getElementById('startRow').style.display = 'none';
+  document.getElementById('progressCard').style.display = 'none';
+  document.getElementById('summaryCard').style.display = 'none';
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('pickCard').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
